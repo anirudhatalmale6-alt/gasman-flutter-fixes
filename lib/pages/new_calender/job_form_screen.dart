@@ -1,0 +1,588 @@
+import 'package:flutter/material.dart';
+
+import '../../services/customer_service.dart';
+import '../../services/engineer_service.dart';
+import '../../services/job_service.dart';
+
+class JobFormScreen extends StatefulWidget {
+  final Map? job;
+  final DateTime? initialDate;
+
+  const JobFormScreen({
+    super.key,
+    this.job,
+    this.initialDate,
+  });
+
+  @override
+  State<JobFormScreen> createState() => _JobFormScreenState();
+}
+
+class _JobFormScreenState extends State<JobFormScreen> {
+  final JobService _jobService = JobService();
+  final EngineerService _engineerService = EngineerService();
+  final MasterDataService _masterDataService = MasterDataService();
+
+  final _title = TextEditingController();
+  final _description = TextEditingController();
+  final _jobType = TextEditingController();
+  final _address = TextEditingController();
+  final _notes = TextEditingController();
+
+  List<dynamic> customers = [];
+  List<dynamic> engineers = [];
+
+  Map? selectedCustomer;
+  Map? selectedEngineer;
+
+  DateTime startTime = DateTime.now();
+  DateTime endTime = DateTime.now().add(const Duration(hours: 1));
+
+  String status = "scheduled";
+  String recurrence = "none";
+
+  DateTime? recurrenceEndDate;
+  int recurrenceInterval = 1;
+
+  bool saving = false;
+  bool loading = true;
+
+  // Reminder fields
+  DateTime? reminderAt;
+  bool remindEngineer = false;
+  bool remindCustomer = false;
+
+  bool get isEdit => widget.job != null;
+
+  @override
+  void initState() {
+    super.initState();
+    _init();
+  }
+
+  Future<void> _init() async {
+    if(mounted){
+      loading = true;
+      setState(() {
+
+      });
+    }
+    try {
+      customers = await _masterDataService.getCustomers();
+      engineers = await _engineerService.getEngineers();
+    } catch (e) {
+      debugPrint("Failed to load data: $e");
+    }
+
+    if (widget.job != null) {
+      final j = widget.job!;
+
+      _title.text = j["title"]?.toString() ?? "";
+      _description.text = j["description"]?.toString() ?? "";
+      _jobType.text = j["job_type"]?.toString() ?? "";
+      _address.text = j["address"]?.toString() ?? "";
+      _notes.text = j["notes"]?.toString() ?? "";
+
+      status = j["status"]?.toString() ?? "scheduled";
+      recurrence = j["recurrence"]?.toString() ?? "none";
+
+      startTime = DateTime.tryParse(j["start_time"]?.toString() ?? "") ??
+          DateTime.now();
+
+      endTime = j["end_time"] != null
+          ? (DateTime.tryParse(j["end_time"].toString()) ??
+              startTime.add(const Duration(hours: 1)))
+          : startTime.add(const Duration(hours: 1));
+
+      if (j["customer_id"] != null) {
+        selectedCustomer = customers.cast<Map>().firstWhere(
+              (c) => c["id"] == j["customer_id"],
+              orElse: () => {},
+            );
+        if (selectedCustomer != null && selectedCustomer!.isEmpty)
+          selectedCustomer = null;
+      }
+
+      if (j["engineer_id"] != null) {
+        selectedEngineer = engineers.cast<Map>().firstWhere(
+              (e) => e["id"] == j["engineer_id"],
+              orElse: () => {},
+            );
+        if (selectedEngineer != null && selectedEngineer!.isEmpty)
+          selectedEngineer = null;
+      }
+
+      if (j["customer_reminder_at"] != null) {
+        reminderAt = DateTime.tryParse(j["customer_reminder_at"].toString());
+      }
+      remindEngineer = j["engineer_reminder_set"] ?? false;
+      remindCustomer = j["customer_reminder_set"] ?? false;
+
+      recurrenceInterval = j["recurrence_interval"] ?? 1;
+
+      if (j["recurrence_end"] != null) {
+        recurrenceEndDate = DateTime.tryParse(
+          j["recurrence_end"].toString(),
+        );
+      }
+    } else if (widget.initialDate != null) {
+      final d = widget.initialDate!;
+      startTime = DateTime(d.year, d.month, d.day, 9);
+      endTime = startTime.add(const Duration(hours: 1));
+      reminderAt = startTime.subtract(const Duration(hours: 24));
+    }
+
+    if (mounted) setState(() => loading = false);
+  }
+
+  Future<void> _pickStart(bool isStartTime) async {
+    final date = await showDatePicker(
+      context: context,
+      initialDate: startTime,
+      firstDate: DateTime(2020),
+      lastDate: DateTime(2035),
+    );
+
+    if (date == null) return;
+
+    final time = await showTimePicker(
+      context: context,
+      initialTime: TimeOfDay.fromDateTime(startTime),
+    );
+
+    if (time == null) return;
+
+    setState(() {
+      if (isStartTime) {
+        startTime =
+            DateTime(date.year, date.month, date.day, time.hour, time.minute);
+      } else {
+        endTime =
+            DateTime(date.year, date.month, date.day, time.hour, time.minute);
+      }
+    });
+  }
+
+  Future<void> pickReminder() async {
+    final initial = reminderAt ?? startTime.subtract(const Duration(hours: 24));
+
+    final date = await showDatePicker(
+      context: context,
+      initialDate: initial,
+      firstDate: DateTime.now().subtract(const Duration(days: 1)),
+      lastDate: DateTime(2035),
+    );
+
+    if (date == null) return;
+
+    final time = await showTimePicker(
+      context: context,
+      initialTime: TimeOfDay.fromDateTime(initial),
+    );
+
+    if (time == null) return;
+
+    setState(() {
+      reminderAt = DateTime(
+        date.year,
+        date.month,
+        date.day,
+        time.hour,
+        time.minute,
+      );
+    });
+  }
+
+  Future<void> _save() async {
+    if (_title.text.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Job title is required")),
+      );
+      return;
+    }
+
+    setState(() => saving = true);
+
+    final data = {
+      "customerId": selectedCustomer?["id"],
+      "engineerId": selectedEngineer?["id"],
+      "title": _title.text.trim(),
+      "description": _description.text.trim(),
+      "jobType": _jobType.text.trim(),
+      "status": status,
+      "startTime": startTime.toIso8601String(),
+      "endTime": endTime.toIso8601String(),
+      "address": _address.text.trim(),
+      "notes": _notes.text.trim(),
+      "recurrence": recurrence,
+     if(recurrenceInterval != null) "recurrenceInterval": recurrenceInterval,
+    if(recurrenceEndDate != null)  "recurrenceEnd": recurrenceEndDate?.toIso8601String(),
+      "reminderAt": reminderAt?.toIso8601String(),
+      "engineerReminder": remindEngineer,
+      "customerReminder": remindCustomer,
+    };
+
+    try {
+      if (isEdit) {
+        await _jobService.updateJob(widget.job!["id"], data);
+      } else {
+        await _jobService.createJob(data);
+      }
+
+      if (mounted) Navigator.pop(context, true);
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("Error: $e")),
+        );
+      }
+    }
+
+    setState(() => saving = false);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (loading) {
+      return Scaffold(
+        appBar: AppBar(title: Text(isEdit ? "Edit Job" : "New Job")),
+        body: const Center(child: CircularProgressIndicator()),
+      );
+    }
+
+    return Scaffold(
+      appBar: AppBar(
+        title: Text(isEdit ? "Edit Job" : "New Job"),
+        actions: [
+          Builder(
+            builder: (context) {
+              return IconButton(
+                tooltip: "Refresh",
+                onPressed: () {
+                  _init();
+                },
+                icon: const Icon(Icons.refresh),
+              );
+            },
+          ),
+        ],
+      ),
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            TextField(
+              controller: _title,
+              decoration: const InputDecoration(
+                labelText: "Job Title *",
+                border: OutlineInputBorder(),
+              ),
+            ),
+            const SizedBox(height: 12),
+
+            TextField(
+              controller: _description,
+              decoration: const InputDecoration(
+                labelText: "Description",
+                border: OutlineInputBorder(),
+              ),
+              maxLines: 3,
+            ),
+            const SizedBox(height: 12),
+
+            TextField(
+              controller: _jobType,
+              decoration: const InputDecoration(
+                labelText: "Job Type",
+                border: OutlineInputBorder(),
+              ),
+            ),
+            const SizedBox(height: 12),
+
+            // Customer dropdown
+            DropdownButtonFormField<int>(
+              value: selectedCustomer?["id"],
+              decoration: const InputDecoration(
+                labelText: "Customer",
+                border: OutlineInputBorder(),
+              ),
+              items: customers.map<DropdownMenuItem<int>>((c) {
+                return DropdownMenuItem<int>(
+                  value: c["id"],
+                  child: Text(c["name"] ?? ""),
+                );
+              }).toList(),
+              onChanged: (val) {
+                setState(() {
+                  selectedCustomer = customers
+                      .cast<Map>()
+                      .firstWhere((c) => c["id"] == val, orElse: () => {});
+                  if(selectedCustomer!.isNotEmpty){
+                    _address.text = selectedCustomer!['address'];
+                  }
+                  if (selectedCustomer!.isEmpty) selectedCustomer = null;
+                });
+              },
+            ),
+            const SizedBox(height: 12),
+
+            // Engineer dropdown
+            DropdownButtonFormField<int>(
+              value: selectedEngineer?["id"],
+              decoration: const InputDecoration(
+                labelText: "Engineer",
+                border: OutlineInputBorder(),
+              ),
+              items: engineers.map<DropdownMenuItem<int>>((e) {
+                return DropdownMenuItem<int>(
+                  value: e["id"],
+                  child: Text(e["name"] ?? ""),
+                );
+              }).toList(),
+              onChanged: (val) {
+                setState(() {
+                  selectedEngineer = engineers
+                      .cast<Map>()
+                      .firstWhere((e) => e["id"] == val, orElse: () => {});
+                  if (selectedEngineer!.isEmpty) selectedEngineer = null;
+                });
+              },
+            ),
+            const SizedBox(height: 12),
+
+            // Start time
+            ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: const Icon(Icons.access_time),
+              title: const Text("Start Time"),
+              subtitle: Text(
+                "${startTime.day}/${startTime.month}/${startTime.year} "
+                "${startTime.hour.toString().padLeft(2, '0')}:"
+                "${startTime.minute.toString().padLeft(2, '0')}",
+              ),
+              trailing: const Icon(Icons.edit),
+              onTap: () {
+                _pickStart(true);
+              },
+            ),
+            const SizedBox(height: 12),
+            ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: const Icon(Icons.access_time),
+              title: const Text("End Time"),
+              subtitle: Text(
+                "${endTime.day}/${endTime.month}/${endTime.year} "
+                "${endTime.hour.toString().padLeft(2, '0')}:"
+                "${endTime.minute.toString().padLeft(2, '0')}",
+              ),
+              trailing: const Icon(Icons.edit),
+              onTap: () {
+                _pickStart(false);
+              },
+            ),
+            const SizedBox(height: 12),
+
+            TextField(
+              controller: _address,
+              decoration: const InputDecoration(
+                labelText: "Address",
+                border: OutlineInputBorder(),
+              ),
+            ),
+            const SizedBox(height: 12),
+
+            TextField(
+              controller: _notes,
+              decoration: const InputDecoration(
+                labelText: "Job Notes",
+                border: OutlineInputBorder(),
+              ),
+              maxLines: 3,
+            ),
+            const SizedBox(height: 12),
+
+            // Status dropdown
+            DropdownButtonFormField<String>(
+              initialValue: status,
+              decoration: const InputDecoration(
+                labelText: "Status",
+                border: OutlineInputBorder(),
+              ),
+              items: const [
+                DropdownMenuItem(value: "scheduled", child: Text("Scheduled")),
+                DropdownMenuItem(value: "confirmed", child: Text("Confirmed")),
+                DropdownMenuItem(
+                    value: "on_the_way", child: Text("On the Way")),
+                DropdownMenuItem(value: "arrived", child: Text("Arrived")),
+                DropdownMenuItem(
+                    value: "in_progress", child: Text("In Progress")),
+                DropdownMenuItem(value: "completed", child: Text("Completed")),
+                DropdownMenuItem(value: "cancelled", child: Text("Cancelled")),
+              ],
+              onChanged: (val) => setState(() => status = val!),
+            ),
+            const SizedBox(height: 12),
+
+            // Recurrence dropdown
+            DropdownButtonFormField<String>(
+              initialValue: recurrence,
+              decoration: const InputDecoration(
+                labelText: "Recurrence",
+                border: OutlineInputBorder(),
+              ),
+              items: const [
+                DropdownMenuItem(value: "none", child: Text("None")),
+                DropdownMenuItem(value: "weekly", child: Text("Weekly")),
+                DropdownMenuItem(value: "monthly", child: Text("Monthly")),
+                DropdownMenuItem(value: "yearly", child: Text("Yearly")),
+              ],
+              onChanged: (val) => setState(() => recurrence = val!),
+            ),
+
+            const SizedBox(height: 12),
+
+            TextFormField(
+              initialValue: recurrenceInterval.toString(),
+              keyboardType: TextInputType.number,
+              decoration: const InputDecoration(
+                labelText: "Recurrence Interval",
+                hintText: "e.g. 1",
+                border: OutlineInputBorder(),
+              ),
+              onChanged: (v) {
+                recurrenceInterval =
+                    int.tryParse(v) ?? 1;
+              },
+            ),
+
+            const SizedBox(height: 12),
+
+            ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: const Icon(Icons.repeat),
+              title: const Text("Recurrence End Date"),
+
+              subtitle: Text(
+                recurrenceEndDate == null
+                    ? "No end date"
+                    : "${recurrenceEndDate!.day}/"
+                    "${recurrenceEndDate!.month}/"
+                    "${recurrenceEndDate!.year} "
+                    "${recurrenceEndDate!.hour.toString().padLeft(2, '0')}:"
+                    "${recurrenceEndDate!.minute.toString().padLeft(2, '0')}",
+              ),
+
+              trailing: const Icon(Icons.edit),
+
+              onTap: () async {
+                final date = await showDatePicker(
+                  context: context,
+                  initialDate:
+                  recurrenceEndDate ??
+                      startTime.add(
+                        const Duration(days: 30),
+                      ),
+                  firstDate: DateTime.now(),
+                  lastDate: DateTime(2035),
+                );
+
+                if (date == null) return;
+
+                final time = await showTimePicker(
+                  context: context,
+                  initialTime: TimeOfDay.fromDateTime(
+                    recurrenceEndDate ??
+                        DateTime.now(),
+                  ),
+                );
+
+                if (time == null) return;
+
+                setState(() {
+                  recurrenceEndDate = DateTime(
+                    date.year,
+                    date.month,
+                    date.day,
+                    time.hour,
+                    time.minute,
+                  );
+                });
+              },
+            ),
+            if (recurrenceEndDate != null)
+              TextButton.icon(
+                onPressed: () {
+                  setState(() {
+                    recurrenceEndDate = null;
+                  });
+                },
+                icon: const Icon(Icons.clear),
+                label: const Text("Clear recurrence end date"),
+              ),
+
+            // Reminder section
+            const SizedBox(height: 16),
+
+            Card(
+              child: Padding(
+                padding: const EdgeInsets.all(12),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      "Reminder",
+                      style: TextStyle(fontWeight: FontWeight.bold),
+                    ),
+                    const SizedBox(height: 8),
+                    ListTile(
+                      contentPadding: EdgeInsets.zero,
+                      leading: const Icon(Icons.notifications_active),
+                      title: const Text("Reminder date/time"),
+                      subtitle: Text(
+                        reminderAt == null
+                            ? "No reminder set"
+                            : "${reminderAt!.day}/${reminderAt!.month}/${reminderAt!.year} "
+                                "${reminderAt!.hour.toString().padLeft(2, '0')}:"
+                                "${reminderAt!.minute.toString().padLeft(2, '0')}",
+                      ),
+                      trailing: const Icon(Icons.edit),
+                      onTap: pickReminder,
+                    ),
+                    SwitchListTile(
+                      value: remindEngineer,
+                      onChanged: (v) => setState(() => remindEngineer = v),
+                      title: const Text("Remind engineer"),
+                    ),
+                    SwitchListTile(
+                      value: remindCustomer,
+                      onChanged: (v) => setState(() => remindCustomer = v),
+                      title: const Text("Remind customer"),
+                      subtitle: const Text(
+                          "Sends email/SMS if customer contact details exist"),
+                    ),
+                    if (reminderAt != null)
+                      TextButton.icon(
+                        onPressed: () => setState(() => reminderAt = null),
+                        icon: const Icon(Icons.clear),
+                        label: const Text("Clear reminder"),
+                      ),
+                  ],
+                ),
+              ),
+            ),
+
+            const SizedBox(height: 24),
+
+            ElevatedButton(
+              onPressed: saving ? null : _save,
+              child: saving
+                  ? const CircularProgressIndicator()
+                  : Text(isEdit ? "Update Job" : "Create Job"),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
