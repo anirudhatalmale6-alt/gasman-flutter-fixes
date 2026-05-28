@@ -25,6 +25,7 @@ import '../api_service/auth_token_store.dart';
 import 'billing/bill_new_screen.dart';
 import 'invite_user/team_screen.dart';
 import 'invoice/invoice_list_screen.dart';
+import 'invoice/overdue_invoice_list_screen.dart';
 import 'auth/invoice_login_screen.dart';
 import 'invoice_setting_page.dart';
 import 'stocks/product_stock_chart.dart';
@@ -271,46 +272,50 @@ class _InvoiceDashboardScreenState extends State<InvoiceDashboardScreen> {
                       Row(
                         children: [
                           _actionButton("Invoices", Icons.receipt, () {
-                            //  Navigator.pushNamed(context, "/invoices");
                             Navigator.push(context,
                                 CupertinoPageRoute(builder: (context) {
                               return InvoiceListScreen();
                             }));
                           }),
                           const SizedBox(width: 10),
-                          _actionButton("Bills", Icons.request_quote, () {
+                          _actionButton("Overdue", Icons.warning_amber_rounded,
+                              () {
                             Navigator.push(context,
                                 CupertinoPageRoute(builder: (context) {
-                              return BillListScreen();
+                              return OverdueInvoiceListScreen();
                             }));
-                            //  Navigator.pushNamed(context, "/bills");
                           }),
                         ],
                       ),
                       const SizedBox(height: 10),
                       Row(
                         children: [
+                          _actionButton("Bills", Icons.request_quote, () {
+                            Navigator.push(context,
+                                CupertinoPageRoute(builder: (context) {
+                              return BillListScreen();
+                            }));
+                          }),
+                          const SizedBox(width: 10),
                           _actionButton("Banking", Icons.account_balance_wallet,
                               () {
                             Navigator.push(context,
                                 CupertinoPageRoute(builder: (context) {
                               return BankAccountListScreen();
                             }));
-                            // Navigator.pushNamed(context, "/bank-accounts");
-                          }),
-                          const SizedBox(width: 10),
-                          _actionButton("Reports", Icons.assessment, () {
-                            // Navigator.pushNamed(context, "/reports");
-                            Navigator.push(context,
-                                CupertinoPageRoute(builder: (context) {
-                              return ReportsMenuScreen();
-                            }));
                           }),
                         ],
                       ),
                       const SizedBox(height: 10),
                       Row(
                         children: [
+                          _actionButton("Reports", Icons.assessment, () {
+                            Navigator.push(context,
+                                CupertinoPageRoute(builder: (context) {
+                              return ReportsMenuScreen();
+                            }));
+                          }),
+                          const SizedBox(width: 10),
                           _actionButton("Company information", Icons.settings,
                               () {
                             Navigator.push(context,
@@ -321,37 +326,34 @@ class _InvoiceDashboardScreenState extends State<InvoiceDashboardScreen> {
                               );
                             }));
                           }),
-                          const SizedBox(width: 10),
+                        ],
+                      ),
+                      const SizedBox(height: 10),
+                      Row(
+                        children: [
                           _actionButton("HMRC", Icons.file_copy_outlined,
                               () async {
                             push(HmrcConnectionScreen());
                           }),
-                        ],
-                      ),
-
-                      const SizedBox(height: 10),
-                      Row(
-                        children: [
+                          const SizedBox(width: 10),
                           _actionButton("Team Members", Icons.people, () async {
                             if(RolePermissions.canManageTeam(userRole!)){
                               push(TeamManagementScreen());
                             }else{
                               showRedSnackbar("You can access team management system");
                             }
-
                           }),
-                          const SizedBox(width: 10),
+                        ],
+                      ),
+                      const SizedBox(height: 10),
+                      Row(
+                        children: [
                           _actionButton(
                               "CIS Module", Icons.account_circle_sharp,
                               () async {
                             push(CisDashboardScreen());
                           }),
-                        ],
-                      ),
-                      const SizedBox(height: 10),
-
-                      Row(
-                        children: [
+                          const SizedBox(width: 10),
                           _actionButton("Vat Return", Icons.money, () async {
                             if (RolePermissions.canSubmitVat(userRole!)) {
                               push(VatReturnNew());
@@ -359,13 +361,19 @@ class _InvoiceDashboardScreenState extends State<InvoiceDashboardScreen> {
                               showRedSnackbar("You can't submit vat");
                             }
                           }),
-                          const SizedBox(width: 10),
+                        ],
+                      ),
+                      const SizedBox(height: 10),
+                      Row(
+                        children: [
                           _actionButton(
                               "Delete Account", Icons.account_circle_outlined,
                               isDanger: true, () async {
                             showDeleteAccountDialog(context);
                             setState(() {});
                           }),
+                          const SizedBox(width: 10),
+                          const Expanded(child: SizedBox()),
                         ],
                       ),
 

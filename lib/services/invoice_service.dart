@@ -17,6 +17,12 @@ class InvoiceService {
     return (res.data["invoices"] as List);
   }
 
+  Future<List<dynamic>> listOverdue() async {
+    final api = await ApiClient.create();
+    final res = await api.dio.get("/invoices/overdue");
+    return (res.data["invoices"] as List);
+  }
+
   Future<Map<String, dynamic>> getById(int id) async {
     final api = await ApiClient.create();
     final res = await api.dio.get("/invoices/$id");
