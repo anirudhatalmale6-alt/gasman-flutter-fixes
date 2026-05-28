@@ -22,6 +22,7 @@ class _ChatListScreenState extends State<ChatListScreen> {
   void initState() {
     super.initState();
     _load();
+    _chatService.markRead();
   }
 
   Future<void> _load() async {

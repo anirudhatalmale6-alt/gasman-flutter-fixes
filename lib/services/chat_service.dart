@@ -37,4 +37,21 @@ class ChatService {
     final res = await api.dio.get("/chat/contacts");
     return res.data["contacts"] ?? [];
   }
+
+  Future<bool> hasUnreadMessages() async {
+    try {
+      final api = await ApiClient.create();
+      final res = await api.dio.get("/chat/unread");
+      return res.data["hasUnread"] == true;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  Future<void> markRead() async {
+    try {
+      final api = await ApiClient.create();
+      await api.dio.post("/chat/mark-read");
+    } catch (_) {}
+  }
 }
