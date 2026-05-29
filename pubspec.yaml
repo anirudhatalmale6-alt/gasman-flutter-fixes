@@ -1,0 +1,74 @@
+name: the_gas_man_app
+description: The Gas Man App — full app with certificates, tools, billing, calendar, merchants, PDFs.
+publish_to: "none"
+#android
+#version: 1.1.2+13
+#ios
+version: 1.0.2+4
+
+environment:
+  sdk: ">=3.3.0 <4.0.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  cupertino_icons: ^1.0.9
+  signature: ^6.3.0
+  pdf: ^3.12.0
+  printing: ^5.14.3
+  share_plus: ^13.1.0
+  path_provider: ^2.1.5
+  url_launcher: ^6.3.2
+  flutter_local_notifications: ^21.0.0
+  intl: ^0.20.2
+  timezone: ^0.11.0
+  file_picker: ^11.0.2
+#  google_mlkit_text_recognition: ^0.15.1
+  image_picker: ^1.2.2
+  fl_chart: any
+  provider: ^6.1.5+1
+  uuid: ^4.5.3
+  table_calendar: ^3.2.0
+  shared_preferences: any
+  firebase_core: any
+  cloud_firestore: ^6.4.1
+  firebase_auth: ^6.5.1
+  firebase_messaging: ^16.2.2
+  cloud_functions: any
+  firebase_storage: any
+  firebase_app_check: ^0.4.4+1
+#  flutter_secure_storage: 10.2.0
+  http: ^1.6.0
+  dio: ^5.9.2
+  animated_bottom_navigation_bar: any
+  logger: ^2.7.0
+  sqflite: any
+  syncfusion_flutter_calendar: any
+  connectivity_plus: ^7.1.1
+
+
+dependency_overrides:
+  win32: ^5.9.0
+
+
+
+
+
+
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+
+flutter:
+  uses-material-design: true
+
+  assets:
+    - assets/
+    - assets/images/
+    - assets/fonts/Roboto-Regular.ttf
+    - assets/fonts/Roboto-Bold.ttf
+    - assets/fonts/Roboto-Medium.ttf
+    - assets/fonts/Roboto-SemiBold.ttf
+
