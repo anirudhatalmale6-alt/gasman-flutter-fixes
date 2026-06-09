@@ -136,99 +136,51 @@ class _DashboardState extends State<Dashboard> {
   }
 
   Widget _buildHeader(AppModel app) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.fromLTRB(26, 0, 26, 60),
-      decoration: const BoxDecoration(
-        gradient: LinearGradient(
-          colors: [Color(0xff004f5f), Color(0xff06283b)],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-      ),
-      child: SafeArea(
-        bottom: false,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const SizedBox(height: 12),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                const Text(
-                  'Welcome back!',
-                  style: TextStyle(
-                    color: Color(0xff19e5e0),
-                    fontSize: 21,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-                GestureDetector(
-                  onTap: () {
-                    if (!app.isLoggedIn!) {
-                      _go(const InvoiceLoginScreen(fromScreen: "calender"));
-                    } else {
-                      _go(const UpcomingJobsScreen());
-                    }
-                  },
-                  child: Stack(
-                    clipBehavior: Clip.none,
-                    children: [
-                      Container(
-                        height: 50,
-                        width: 50,
-                        decoration: BoxDecoration(
-                          color: Colors.black.withOpacity(0.22),
-                          shape: BoxShape.circle,
-                        ),
-                        child: const Icon(
-                          Icons.notifications_outlined,
-                          color: Colors.white,
-                          size: 28,
-                        ),
-                      ),
-                      Positioned(
-                        right: 2,
-                        top: -2,
-                        child: Container(
-                          height: 16,
-                          width: 16,
-                          decoration: const BoxDecoration(
-                            color: Color(0xffff6a00),
-                            shape: BoxShape.circle,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
+    return Stack(
+      children: [
+        Container(
+          width: double.infinity,
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              colors: [Color(0xff004f5f), Color(0xff06283b)],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
             ),
-            const SizedBox(height: 16),
-            const Text(
-              'Gas Man\nBusiness',
-              style: TextStyle(
-                color: Colors.white,
-                fontSize: 44,
-                height: 0.98,
-                fontWeight: FontWeight.w900,
-                letterSpacing: -1.4,
+          ),
+          child: SafeArea(
+            bottom: false,
+            child: Padding(
+              padding: const EdgeInsets.only(bottom: 50),
+              child: Image.asset(
+                'assets/images/gas_man_banner.png',
+                width: double.infinity,
+                fit: BoxFit.fitWidth,
+                errorBuilder: (_, __, ___) => const SizedBox(height: 200),
               ),
             ),
-            const SizedBox(height: 18),
-            const Text(
-              'Manage your jobs, accounts\nand certificates in one place.',
-              style: TextStyle(
-                color: Colors.white70,
-                fontSize: 16,
-                height: 1.45,
-                fontWeight: FontWeight.w500,
+          ),
+        ),
+        Positioned(
+          top: 0,
+          right: 16,
+          child: SafeArea(
+            bottom: false,
+            child: GestureDetector(
+              onTap: () {
+                if (!app.isLoggedIn!) {
+                  _go(const InvoiceLoginScreen(fromScreen: "calender"));
+                } else {
+                  _go(const UpcomingJobsScreen());
+                }
+              },
+              child: const SizedBox(
+                height: 50,
+                width: 50,
               ),
             ),
-            const SizedBox(height: 16),
-          ],
+          ),
         ),
-      ),
+      ],
     );
   }
 
