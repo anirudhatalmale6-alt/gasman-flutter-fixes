@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'dart:typed_data';
 
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:pdf/pdf.dart';
 import 'package:the_gas_man_app/pages/finance/expense_form_page.dart';
@@ -8,6 +9,7 @@ import 'package:the_gas_man_app/pages/new_tax_and_invoice/data_models/bill_detai
 import 'package:the_gas_man_app/services/bill_service.dart';
 import 'package:the_gas_man_app/utils_class/utils.dart';
 
+import '../../../../services/company_service.dart';
 import '../../../../services/email_service.dart';
 import '../../../../utils_class/app_pdf_documents.dart';
 import '../../../../utils_class/launchers.dart';
@@ -15,6 +17,7 @@ import '../../../../utils_class/money.dart';
 import '../../../../utils_class/pdf_print.dart';
 import '../../../../widgets/attachment_section.dart';
 import '../../../new_invoice_page/account_storage_file.dart';
+import '../../api_service/api_config.dart';
 import '../../pdf_service.dart';
 import 'package:pdf/widgets.dart' as pw;
 
@@ -32,25 +35,40 @@ class BillViewScreen extends StatefulWidget {
 
 class _BillViewScreenState extends State<BillViewScreen> {
   final EmailService _emailService = EmailService();
+  final CompanyService _companyService = CompanyService();
   final _billService = BillService();
 
   Future<BillDetails> _loadBill() async {
-    // 🔥 Replace with your real API call
     BillDetails res = await _billService.getDetail(widget.billId);
-
     return res;
   }
 
   Future<void> _sharePdf(BuildContext context, BillDetails billDetails) async {
-    Uint8List bytes = await _buildInvoicePdf(billDetails);
-    await PdfPrint.share(bytes,
-        filename: "${billDetails.bill!.billNumber}.pdf");
+    try {
+      Uint8List bytes = await _buildInvoicePdf(billDetails);
+      await PdfPrint.share(bytes,
+          filename: "${billDetails.bill?.billNumber ?? 'bill'}.pdf");
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("Failed to share PDF: $e")),
+        );
+      }
+    }
   }
 
   Future<void> _printPdf(BuildContext context, BillDetails billDetails) async {
-    Uint8List bytes = await _buildInvoicePdf(billDetails);
-    await PdfPrint.previewAndPrint(bytes,
-        filename: "${billDetails.bill!.billNumber}.pdf");
+    try {
+      Uint8List bytes = await _buildInvoicePdf(billDetails);
+      await PdfPrint.previewAndPrint(bytes,
+          filename: "${billDetails.bill?.billNumber ?? 'bill'}.pdf");
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("Failed to print PDF: $e")),
+        );
+      }
+    }
   }
 
 
@@ -316,67 +334,137 @@ class _BillViewScreenState extends State<BillViewScreen> {
   }
 
   Future<Uint8List> _buildInvoicePdf(BillDetails billDetails) async {
-   final pdf = AppPdfDocument();
-    final accountStorage = AccountStorage();
-    await accountStorage.load();
-    final s = accountStorage.settings;
+    final pdf = AppPdfDocument();
     Bill inv = billDetails.bill!;
+
+    // Fetch company info from server API
+    Map<String, dynamic> co = {};
+    try {
+      co = await _companyService.getCompany();
+    } catch (_) {}
+
+    final companyName = (co['business_name'] as String?) ??
+        (co['name'] as String?) ?? '';
+    final companyAddress = (co['address'] as String?) ?? '';
+    final companyPhone = (co['phone'] as String?) ?? '';
+    final companyEmail = (co['email'] as String?) ?? '';
+    final companyVrn = (co['vrn'] as String?) ?? '';
+    final gasSafeNumber = (co['gas_safe_number'] as String?) ?? '';
+    final paymentDetails = (co['payment_details'] as String?) ?? '';
+    final logoUrl = co['logo_url'] as String?;
+    final symbol = (co['currency_symbol'] as String?) ?? '£';
+
+    // Download logo from server
     pw.MemoryImage? logo;
-    if (s.logoPath != null && s.logoPath!.isNotEmpty) {
-      final Uint8List imageBytes = await File(s.logoPath!).readAsBytes();
-      logo = pw.MemoryImage(imageBytes);
+    if (logoUrl != null && logoUrl.isNotEmpty) {
+      try {
+        final fullUrl = '${ApiConfig.baseUrl}$logoUrl';
+        final response = await Dio().get(
+          fullUrl,
+          options: Options(responseType: ResponseType.bytes),
+        );
+        logo = pw.MemoryImage(Uint8List.fromList(response.data));
+      } catch (_) {}
     }
 
-    final _subTotal = getSubtotal(billDetails.lines!);
-    final _total = getGrandTotal(billDetails.lines!);
-    final _vatTotal = getTotalVat(billDetails.lines!);
+    // Fallback: try local logo
+    if (logo == null) {
+      try {
+        final accountStorage = AccountStorage();
+        await accountStorage.load();
+        final localPath = accountStorage.settings.logoPath;
+        if (localPath != null && localPath.isNotEmpty) {
+          final f = File(localPath);
+          if (await f.exists()) {
+            logo = pw.MemoryImage(await f.readAsBytes());
+          }
+        }
+      } catch (_) {}
+    }
 
-    // String vatLabel(double r) {
-    //   switch (r) {
-    //     case 0:
-    //       return '0%';
-    //     case 5:
-    //       return '5%';
-    //     case 20:
-    //       return '20%';
-    //   }
-    //   return '0%';
-    // }
+    final subTotal = getSubtotal(billDetails.lines ?? []);
+    final total = getGrandTotal(billDetails.lines ?? []);
+    final vatTotal = getTotalVat(billDetails.lines ?? []);
 
     pdf.addPage(
       pw.MultiPage(
         build: (_) => [
-          if (logo != null) ...[
-            pw.Image(logo, width: 80, height: 80),
-            pw.SizedBox(height: 8)
-          ],
+          // Header: logo + company info
+          pw.Row(
+            crossAxisAlignment: pw.CrossAxisAlignment.start,
+            children: [
+              if (logo != null) ...[
+                pw.Image(logo, width: 80, height: 80),
+                pw.SizedBox(width: 12),
+              ],
+              pw.Expanded(
+                child: pw.Column(
+                  crossAxisAlignment: pw.CrossAxisAlignment.start,
+                  children: [
+                    if (companyName.isNotEmpty)
+                      pw.Text(companyName,
+                          style: pw.TextStyle(
+                              fontSize: 16, fontWeight: pw.FontWeight.bold)),
+                    if (companyAddress.isNotEmpty)
+                      pw.Text(companyAddress, style: const pw.TextStyle(fontSize: 9)),
+                    if (companyPhone.isNotEmpty)
+                      pw.Text('Tel: $companyPhone', style: const pw.TextStyle(fontSize: 9)),
+                    if (companyEmail.isNotEmpty)
+                      pw.Text(companyEmail, style: const pw.TextStyle(fontSize: 9)),
+                  ],
+                ),
+              ),
+              pw.Column(
+                crossAxisAlignment: pw.CrossAxisAlignment.end,
+                children: [
+                  if (companyVrn.isNotEmpty)
+                    pw.Text('VAT: $companyVrn', style: const pw.TextStyle(fontSize: 8)),
+                  if (gasSafeNumber.isNotEmpty)
+                    pw.Text('Gas Safe: $gasSafeNumber', style: const pw.TextStyle(fontSize: 8)),
+                ],
+              ),
+            ],
+          ),
+          pw.Divider(),
+          pw.SizedBox(height: 8),
           pw.Text(
-            'Invoice ${inv.billNumber}',
+            'BILL ${inv.billNumber ?? ""}',
             style: pw.TextStyle(fontSize: 20, fontWeight: pw.FontWeight.bold),
           ),
           pw.SizedBox(height: 8),
-          pw.Text('Date: ${_fmtDate(DateTime.parse(inv.billDate!))}'),
-          if (inv.dueDate != null)
-            pw.Text('Due: ${_fmtDate(DateTime.parse(inv.dueDate!))}'),
-          pw.SizedBox(height: 16),
-          pw.Text('From:', style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
-          pw.Text(s.businessName),
-          if (s.businessAddress.isNotEmpty) pw.Text(s.businessAddress),
-          if (s.businessPhone.isNotEmpty) pw.Text('Phone: ${s.businessPhone}'),
-          if (s.businessEmail.isNotEmpty) pw.Text('Email: ${s.businessEmail}'),
-          if (s.vatRegistered && s.vatNumber.isNotEmpty)
-            pw.Text('VAT: ${s.vatNumber}'),
-          pw.SizedBox(height: 12),
-          pw.Text('To:', style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
-        //  pw.Text(inv.supplierId!.toString()),
-          if (billDetails.supplier!.name != null)
-            pw.Text("${billDetails.supplier!.name}"),
-          if (billDetails.supplier!.address != null)
-            pw.Text("${billDetails.supplier!.address}"),
-          if (billDetails.supplier!.phone != null)
-            pw.Text('Phone: ${billDetails.supplier!.phone}'),
-          if (billDetails.supplier!.email != null)
-            pw.Text('Email: ${billDetails.supplier!.email}'),
+          pw.Row(
+            crossAxisAlignment: pw.CrossAxisAlignment.start,
+            children: [
+              pw.Expanded(
+                child: pw.Column(
+                  crossAxisAlignment: pw.CrossAxisAlignment.start,
+                  children: [
+                    if (inv.billDate != null)
+                      pw.Text('Date: ${_fmtDate(DateTime.parse(inv.billDate!))}'),
+                    if (inv.dueDate != null)
+                      pw.Text('Due: ${_fmtDate(DateTime.parse(inv.dueDate!))}'),
+                  ],
+                ),
+              ),
+              pw.Expanded(
+                child: pw.Column(
+                  crossAxisAlignment: pw.CrossAxisAlignment.end,
+                  children: [
+                    pw.Text('From:',
+                        style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
+                    if (billDetails.supplier?.name != null)
+                      pw.Text(billDetails.supplier!.name!),
+                    if (billDetails.supplier?.address != null)
+                      pw.Text(billDetails.supplier!.address!),
+                    if (billDetails.supplier?.phone != null)
+                      pw.Text('Tel: ${billDetails.supplier!.phone}'),
+                    if (billDetails.supplier?.email != null)
+                      pw.Text(billDetails.supplier!.email!),
+                  ],
+                ),
+              ),
+            ],
+          ),
           pw.SizedBox(height: 12),
           pw.Table(
             border: pw.TableBorder.all(width: 0.4),
@@ -388,49 +476,54 @@ class _BillViewScreenState extends State<BillViewScreen> {
                 children: [
                   pw.Padding(
                     padding: const pw.EdgeInsets.all(4),
-                    child: pw.Text('Description'),
+                    child: pw.Text('Description',
+                        style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
                   ),
                   pw.Padding(
                     padding: const pw.EdgeInsets.all(4),
-                    child: pw.Text('Qty'),
+                    child: pw.Text('Qty',
+                        style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
                   ),
                   pw.Padding(
                     padding: const pw.EdgeInsets.all(4),
-                    child: pw.Text('Unit'),
+                    child: pw.Text('Unit Cost',
+                        style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
                   ),
                   pw.Padding(
                     padding: const pw.EdgeInsets.all(4),
-                    child: pw.Text('Vat'),
+                    child: pw.Text('VAT',
+                        style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
                   ),
                   pw.Padding(
                     padding: const pw.EdgeInsets.all(4),
-                    child: pw.Text('Total'),
+                    child: pw.Text('Total',
+                        style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
                   ),
                 ],
               ),
-              ...billDetails.lines!.map(
+              ...(billDetails.lines ?? []).map(
                 (item) => pw.TableRow(
                   children: [
                     pw.Padding(
                       padding: const pw.EdgeInsets.all(4),
-                      child: pw.Text(item.description!),
+                      child: pw.Text(item.description ?? ''),
                     ),
                     pw.Padding(
                       padding: const pw.EdgeInsets.all(4),
-                      child: pw.Text(item.quantity!.toStringAsFixed(0)),
+                      child: pw.Text((item.quantity ?? 0).toStringAsFixed(0)),
                     ),
                     pw.Padding(
                       padding: const pw.EdgeInsets.all(4),
-                      child: pw.Text('£${item.unitCost!}'),
+                      child: pw.Text('$symbol${item.unitCost ?? "0.00"}'),
                     ),
                     pw.Padding(
                       padding: const pw.EdgeInsets.all(4),
                       child: pw.Text(
-                          '£${((double.parse(item.unitCost!) * item.quantity!) * (double.parse(item.vatRate.toString()) / 100)).toString().toTwoDecimal()}'),
+                          '$symbol${((double.tryParse(item.unitCost ?? "0") ?? 0) * (item.quantity ?? 0) * ((double.tryParse(item.vatRate?.toString() ?? "0") ?? 0) / 100)).toStringAsFixed(2)}'),
                     ),
                     pw.Padding(
                       padding: const pw.EdgeInsets.all(4),
-                      child: pw.Text('£${inv.total.toString().toTwoDecimal()}'),
+                      child: pw.Text('$symbol${item.lineTotal ?? "0.00"}'),
                     ),
                   ],
                 ),
@@ -443,10 +536,10 @@ class _BillViewScreenState extends State<BillViewScreen> {
             child: pw.Column(
               crossAxisAlignment: pw.CrossAxisAlignment.end,
               children: [
-                pw.Text('Subtotal: £${_subTotal.toString().toTwoDecimal()}'),
-                pw.Text('VAT : £${_vatTotal.toString().toTwoDecimal()}'),
+                pw.Text('Subtotal: $symbol${subTotal.toStringAsFixed(2)}'),
+                pw.Text('VAT: $symbol${vatTotal.toStringAsFixed(2)}'),
                 pw.Text(
-                  'TOTAL: £${_total.toString().toTwoDecimal()}',
+                  'TOTAL: $symbol${total.toStringAsFixed(2)}',
                   style: pw.TextStyle(
                     fontSize: 14,
                     fontWeight: pw.FontWeight.bold,
@@ -455,6 +548,13 @@ class _BillViewScreenState extends State<BillViewScreen> {
               ],
             ),
           ),
+          if (paymentDetails.isNotEmpty) ...[
+            pw.SizedBox(height: 12),
+            pw.Divider(),
+            pw.Text('Payment Details:',
+                style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 10)),
+            pw.Text(paymentDetails, style: const pw.TextStyle(fontSize: 9)),
+          ],
         ],
       ),
     );
