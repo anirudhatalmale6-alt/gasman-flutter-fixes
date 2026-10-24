@@ -1,4 +1,6 @@
 import 'dart:async';
+import 'package:the_gas_man_app/utils_class/pdf_action.dart';
+import 'package:the_gas_man_app/utils_class/pdf_logo.dart';
 import 'dart:io';
 import 'dart:typed_data';
 
@@ -159,7 +161,10 @@ class _InvoicesTabState extends State<InvoicesTab> {
   String _fmtDate(DateTime d) =>
       '${d.day.toString().padLeft(2, '0')}/${d.month.toString().padLeft(2, '0')}/${d.year}';
 
-  Future<void> _showPdfOptions(Invoice inv) async {
+  Future<void> _showPdfOptions(Invoice inv) =>
+      PdfAction.run(context, () => _showPdfOptionsImpl(inv));
+
+  Future<void> _showPdfOptionsImpl(Invoice inv) async {
     final bytes = await _buildInvoicePdf(inv);
     if (!mounted) return;
 
@@ -173,15 +178,16 @@ class _InvoicesTabState extends State<InvoicesTab> {
               title: const Text('Preview / Print PDF'),
               onTap: () async {
                 Navigator.pop(context);
-                await Printing.layoutPdf(
-                  onLayout: (_) async => bytes,
+                await PdfAction.run(
+                  this.context,
+                  () => Printing.layoutPdf(onLayout: (_) async => bytes),
                 );
               },
             ),
             ListTile(
               leading: const Icon(Icons.email_outlined),
               title: const Text('Email PDF'),
-              onTap: () async {
+              onTap: () => PdfAction.run(this.context, () async {
                 Navigator.pop(context);
                 final file = await _writeTempFile(bytes, '${inv.number}.pdf');
                 await Share.shareXFiles(
@@ -191,7 +197,7 @@ class _InvoicesTabState extends State<InvoicesTab> {
                   text:
                       'Please find attached your ${inv.isEstimate ? "estimate" : "invoice"} ${inv.number}.',
                 );
-              },
+              }),
             ),
           ],
         ),
@@ -214,10 +220,7 @@ class _InvoicesTabState extends State<InvoicesTab> {
     final s = _accountStorage.settings;
     pw.MemoryImage? logo;
 
-    if (s.logoPath != null && s.logoPath!.isNotEmpty) {
-      final Uint8List imageBytes = await File(s.logoPath!).readAsBytes();
-      logo = pw.MemoryImage(imageBytes);
-    }
+    logo = await PdfLogo.load(s.logoPath);
 
     /*  String vatLabel(double r) {
       switch (r) {

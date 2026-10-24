@@ -1,4 +1,6 @@
 import 'dart:convert';
+import 'package:the_gas_man_app/utils_class/pdf_logo.dart';
+import 'package:the_gas_man_app/utils_class/pdf_action.dart';
 import 'dart:io';
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
@@ -376,12 +378,17 @@ class _NewWarningNoticePageState extends State<NewWarningNoticePage> {
   }
 
   // generate pdf
+  Future<void> _onPdfPressed(WarningNoticeRecord data) =>
+      PdfAction.run(context, () => _onPdfPressedImpl(data));
 
-  Future<void> _onPdfPressed(WarningNoticeRecord data) async {
+  Future<void> _onPdfPressedImpl(WarningNoticeRecord data) async {
     final bytes = await generateGasSafetyCertificatePdf(data);
     await Printing.layoutPdf(onLayout: (_) async => bytes);
   }
-  Future<void> _onEmailPressed(WarningNoticeRecord data) async {
+  Future<void> _onEmailPressed(WarningNoticeRecord data) =>
+      PdfAction.run(context, () => _onEmailPressedImpl(data));
+
+  Future<void> _onEmailPressedImpl(WarningNoticeRecord data) async {
 
     final bytes = await generateGasSafetyCertificatePdf(data);
     final file = await _writePdfToTempFile(bytes);
@@ -410,10 +417,7 @@ class _NewWarningNoticePageState extends State<NewWarningNoticePage> {
     await accountStorage.load();
     final s = accountStorage.settings;
    pw.MemoryImage? logo;
-   if(s.logoPath != null && s.logoPath!.isNotEmpty){
-     final Uint8List imageBytes = await File(s.logoPath!).readAsBytes();
-     logo = pw.MemoryImage(imageBytes);
-   }
+   logo = await PdfLogo.load(s.logoPath);
    final icGasLogo = await imageFromAssetBundle(
      'assets/ic_gas_safe.png',
    );

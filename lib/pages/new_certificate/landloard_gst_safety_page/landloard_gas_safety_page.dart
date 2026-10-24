@@ -1,4 +1,6 @@
 import 'dart:convert';
+import 'package:the_gas_man_app/utils_class/pdf_logo.dart';
+import 'package:the_gas_man_app/utils_class/pdf_action.dart';
 import 'dart:developer';
 import 'dart:io';
 import 'dart:typed_data';
@@ -521,10 +523,7 @@ class _LandlordGasSafetyPageState extends State<LandlordGasSafetyPage> {
     await accountStorage.load();
     final s = accountStorage.settings;
     pw.MemoryImage? logo;
-    if (s.logoPath != null && s.logoPath!.isNotEmpty) {
-      final Uint8List imageBytes = await File(s.logoPath!).readAsBytes();
-      logo = pw.MemoryImage(imageBytes);
-    }
+    logo = await PdfLogo.load(s.logoPath);
     pw.Widget boolRow(String label, bool value) {
       return pw.Row(
         mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
@@ -720,16 +719,20 @@ class _LandlordGasSafetyPageState extends State<LandlordGasSafetyPage> {
     await file.writeAsBytes(bytes, flush: true);
     return file;
   }
+  Future<void> _onPdfPressed() =>
+      PdfAction.run(context, () => _onPdfPressedImpl());
 
-  Future<void> _onPdfPressed() async {
-    if (!_formKey.currentState!.validate()) return;
+  Future<void> _onPdfPressedImpl() async {
+    if (!_formKey.currentState!.validate()) throw PdfAction.missingFields;
     final record = _buildRecord();
     final bytes = await _generatePdfBytes(record);
     await Printing.layoutPdf(onLayout: (_) async => bytes);
   }
+  Future<void> _onEmailPressed() =>
+      PdfAction.run(context, () => _onEmailPressedImpl());
 
-  Future<void> _onEmailPressed() async {
-    if (!_formKey.currentState!.validate()) return;
+  Future<void> _onEmailPressedImpl() async {
+    if (!_formKey.currentState!.validate()) throw PdfAction.missingFields;
     final record = _buildRecord();
     final bytes = await _generatePdfBytes(record);
     final file = await _writePdfToTempFile(bytes);

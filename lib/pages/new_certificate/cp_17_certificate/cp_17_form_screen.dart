@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'package:the_gas_man_app/utils_class/pdf_action.dart';
 
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
@@ -301,7 +302,10 @@ class _Cp17FormScreenState extends State<Cp17FormScreen> {
     );
   }
 
-  Future<void> exportPdf() async {
+  Future<void> exportPdf() =>
+      PdfAction.run(context, () => exportPdfImpl());
+
+  Future<void> exportPdfImpl() async {
     await save(lock: locked);
 
     await Cp17PdfService.shareCertificate(

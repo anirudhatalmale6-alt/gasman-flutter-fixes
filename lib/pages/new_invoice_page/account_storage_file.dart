@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:path_provider/path_provider.dart';
 
+import '../../utils_class/pdf_logo.dart';
 import 'data_model/all_models.dart';
 
 class AccountStorage {
@@ -52,6 +53,8 @@ class AccountStorage {
   Future<void> saveSettings() async {
     final f = await _settingsFile();
     await f.writeAsString(jsonEncode(settings.toJson()));
+    // logoPath often points at the temp folder, which Android can empty.
+    await PdfLogo.keep(settings.logoPath);
   }
 
   Future<void> saveCustomers() async {

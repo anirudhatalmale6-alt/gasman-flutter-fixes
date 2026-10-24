@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'package:the_gas_man_app/utils_class/pdf_logo.dart';
 import 'dart:io';
 import 'dart:typed_data';
 
@@ -37,10 +38,7 @@ class Cp16PdfService {
     await accountStorage.load();
     final s = accountStorage.settings;
     pw.MemoryImage? logo;
-    if(s.logoPath != null && s.logoPath!.isNotEmpty){
-      final Uint8List imageBytes = await File(s.logoPath!).readAsBytes();
-      logo = pw.MemoryImage(imageBytes);
-    }
+    logo = await PdfLogo.load(s.logoPath);
 
     final gasSafeLogo = await imageFromAssetBundle(
       'assets/ic_gas_safe.png',

@@ -1,4 +1,6 @@
 import 'dart:convert';
+import 'package:the_gas_man_app/utils_class/pdf_action.dart';
+import 'package:the_gas_man_app/utils_class/pdf_logo.dart';
 import 'dart:io';
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
@@ -212,7 +214,10 @@ class _BreakdownRecordPageState extends State<BreakdownRecordPage> {
   }
 
   /// ================= PDF =================
-  Future<void> _pdf() async {
+  Future<void> _pdf() =>
+      PdfAction.run(context, () => _pdfImpl());
+
+  Future<void> _pdfImpl() async {
     final pdf = AppPdfDocument();
 
     final engPng = _engineerSignatureBytes;
@@ -222,10 +227,7 @@ class _BreakdownRecordPageState extends State<BreakdownRecordPage> {
     await accountStorage.load();
     final s = accountStorage.settings;
     pw.MemoryImage? logo;
-    if (s.logoPath != null && s.logoPath!.isNotEmpty) {
-      final Uint8List imageBytes = await File(s.logoPath!).readAsBytes();
-      logo = pw.MemoryImage(imageBytes);
-    }
+    logo = await PdfLogo.load(s.logoPath);
     pw.Widget boolRow(String label, bool value) {
       return pw.Row(
         mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,

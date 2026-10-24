@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'package:the_gas_man_app/utils_class/pdf_action.dart';
 import 'package:flutter/material.dart';
 import 'package:signature/signature.dart';
 import '../../../new_invoice_page/account_storage_file.dart';
@@ -410,7 +411,10 @@ class _Cp16FormScreenState extends State<Cp16FormScreen> {
     );
   }
 
-  Future<void> exportPdf() async {
+  Future<void> exportPdf() =>
+      PdfAction.run(context, () => exportPdfImpl());
+
+  Future<void> exportPdfImpl() async {
     await save(lock: locked);
 
     await Cp16PdfService.shareCertificate(
